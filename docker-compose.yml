@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cert_service
+      POSTGRES_USER: cert_service
+      POSTGRES_PASSWORD: cert_service
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cert_service -d cert_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cert_service:cert_service@db:5432/cert_service
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+
+  tls-proxy:
+    build:
+      context: ./tls
+    depends_on:
+      - api
+    ports:
+      - "8443:8443"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - tls-proxy
+    environment:
+      CERT_API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
